@@ -3,11 +3,16 @@ import { Link, useLocation } from 'react-router-dom';
 const Header = () => {
   const location = useLocation();
 
-  const getLinkClass = (path) => {
-    const isActive = location.pathname === path;
-    return isActive
-      ? "bg-ink text-invert px-3 py-1 uppercase tracking-terminal font-semibold"
-      : "text-ink uppercase tracking-terminal font-semibold hover:bg-ink hover:text-invert px-3 py-1 transition-none";
+  const NavItem = ({ to, label }) => {
+    const isActive = location.pathname === to;
+    return (
+      <Link 
+        to={to} 
+        className="text-ink uppercase tracking-terminal font-semibold hover:bg-ink/80 hover:text-invert px-3 py-1 transition-none"
+      >
+        {isActive ? `[*] ${label}` : `[ ] ${label}`}
+      </Link>
+    );
   };
 
   return (
@@ -17,9 +22,9 @@ const Header = () => {
           [ MANAV.IO ]
         </span>
         <nav className="flex space-x-6 text-sm">
-          <Link to="/" className={getLinkClass("/")}>[ HOME ]</Link>
-          <Link to="/projects" className={getLinkClass("/projects")}>[ PROJECTS ]</Link>
-          <Link to="/cv" className={getLinkClass("/cv")}>[ CV ]</Link>
+          <NavItem to="/" label="HOME" />
+          <NavItem to="/projects" label="PROJECTS" />
+          <NavItem to="/cv" label="CV" />
         </nav>
       </div>
     </header>
