@@ -82,9 +82,6 @@ const AreYouCompatible = () => {
                                 <span className="text-sm cursor-pointer select-none flex-grow">
                                     {q.text}
                                 </span>
-                                <span className={`text-xs font-semibold flex-shrink-0 ${q.value >= 0 ? '' : ''}`}>
-                                    {q.value > 0 ? `+${q.value}` : q.value}
-                                </span>
                             </div>
                         ))}
                     </div>
