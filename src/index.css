@@ -2,8 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  body {
+    @apply bg-canvas text-ink font-mono antialiased;
+    cursor: crosshair;
+  }
+}
+
 @layer utilities {
-  .text-shadow {
-    text-shadow: 0 2px 10px rgba(255, 255, 255, 0.05);
+  .border-dotted-structure {
+    border-style: dotted;
+    border-color: #BBBBBB;
+  }
+
+  .focus-terminal:focus {
+    outline: 1px dotted #111111;
+    outline-offset: 2px;
+  }
+
+  .btn-primary {
+    @apply bg-highlight text-invert px-6 py-3 font-semibold uppercase tracking-terminal;
+    border-radius: 0;
+  }
+
+  .btn-primary:hover {
+    @apply bg-invert text-highlight border border-highlight;
+  }
+
+  .btn-secondary {
+    @apply bg-transparent border border-ink text-ink px-6 py-3 font-semibold uppercase tracking-terminal;
+    border-radius: 0;
+  }
+
+  .btn-secondary:hover {
+    @apply bg-ink text-invert;
+  }
+
+  .nav-link {
+    @apply text-ink uppercase tracking-terminal font-semibold;
+  }
+
+  .nav-link:hover {
+    @apply text-invert bg-ink px-2;
+  }
+
+  .card-terminal {
+    @apply border border-structure bg-transparent p-6;
+    border-radius: 0;
+  }
+
+  .card-terminal:hover {
+    @apply border-ink bg-ink text-invert;
+  }
+
+  .divider-dotted {
+    border-top: 1px dotted #BBBBBB;
   }
 }

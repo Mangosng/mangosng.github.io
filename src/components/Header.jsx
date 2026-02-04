@@ -5,19 +5,23 @@ const Header = () => {
 
   const getLinkClass = (path) => {
     const isActive = location.pathname === path;
-    const baseClass = "text-light/80 hover:text-accent hover:tracking-wider transition-all duration-300";
-    // We can add specific active styling if desired, but for now matching the original behavior (which didn't seem to have prominent active state other than hover, but React Router allows us to add one if we want).
-    // The original just had links.
-    return baseClass; 
+    return isActive
+      ? "bg-ink text-invert px-3 py-1 uppercase tracking-terminal font-semibold"
+      : "text-ink uppercase tracking-terminal font-semibold hover:bg-ink hover:text-invert px-3 py-1 transition-none";
   };
 
   return (
-    <header className="bg-grayish border-b border-light/10 sticky top-0 z-50 shadow-[0_0_15px_rgba(255,255,255,0.05)]">
-      <nav className="container mx-auto flex justify-center py-4 space-x-10 text-lg font-semibold uppercase tracking-wide">
-        <Link to="/" className={getLinkClass("/")}>Home</Link>
-        <Link to="/projects" className={getLinkClass("/projects")}>Projects</Link>
-        <Link to="/cv" className={getLinkClass("/cv")}>CV</Link>
-      </nav>
+    <header className="bg-canvas border-b border-dotted border-structure sticky top-0 z-50">
+      <div className="container mx-auto flex justify-between items-center py-4 px-6">
+        <span className="text-ink font-semibold uppercase tracking-terminal text-sm">
+          [ MANAV.IO ]
+        </span>
+        <nav className="flex space-x-6 text-sm">
+          <Link to="/" className={getLinkClass("/")}>[ HOME ]</Link>
+          <Link to="/projects" className={getLinkClass("/projects")}>[ PROJECTS ]</Link>
+          <Link to="/cv" className={getLinkClass("/cv")}>[ CV ]</Link>
+        </nav>
+      </div>
     </header>
   );
 };

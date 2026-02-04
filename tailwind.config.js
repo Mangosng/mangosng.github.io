@@ -7,15 +7,17 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        display: ["Special Elite", "monospace"],
-        body: ["IBM Plex Mono", "monospace"],
+        mono: ["JetBrains Mono", "IBM Plex Mono", "Space Mono", "monospace"],
       },
       colors: {
-        dark: "#111111",
-        grayish: "#1b1b1b",
-        mid: "#2a2a2a",
-        light: "#d1d1d1",
-        accent: "#e5e5e5",
+        canvas: "#EEEEEE",
+        ink: "#111111",
+        structure: "#BBBBBB",
+        highlight: "#000000",
+        invert: "#FFFFFF",
+      },
+      letterSpacing: {
+        terminal: "0.05em",
       },
     },
   },
