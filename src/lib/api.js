@@ -87,3 +87,50 @@ export async function getEventTeamStats(eventKey) {
     return [];
   }
 }
+
+// Fetch team year stats with fallback to previous years
+export async function getTeamYearStats(teamNumber) {
+  const years = [2026, 2025, 2024, 2023];
+  
+  for (const year of years) {
+    try {
+      const response = await fetch(`${STATBOTICS_BASE_URL}/team_year/${teamNumber}/${year}`);
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          ...data,
+          dataYear: year,
+          hasCurrentYearData: year === 2026,
+        };
+      }
+    } catch (error) {
+      continue;
+    }
+  }
+  return null;
+}
+
+// Fetch stats for multiple teams (batch with fallback)
+export async function getTeamsYearStats(teamNumbers) {
+  const results = {};
+  
+  // Try to batch fetch 2026 data first
+  try {
+    const promises = teamNumbers.map(async (num) => {
+      const stats = await getTeamYearStats(num);
+      if (stats) {
+        results[num] = stats;
+      }
+    });
+    
+    // Process in batches to avoid overwhelming the API
+    const batchSize = 10;
+    for (let i = 0; i < promises.length; i += batchSize) {
+      await Promise.all(promises.slice(i, i + batchSize));
+    }
+  } catch (error) {
+    console.error('Error fetching team stats:', error);
+  }
+  
+  return results;
+}

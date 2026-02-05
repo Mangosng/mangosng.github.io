@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getEventInfo, getEventTeams, getEventMatches, getEventTeamStats } from '../../lib/api';
+import { getEventInfo, getEventTeams, getEventMatches, getEventTeamStats, getTeamsYearStats } from '../../lib/api';
 import { getEventScoutingData } from '../../lib/scouting';
 import { TEAM_NUMBER } from '../../lib/supabase';
 import TeamList from '../../components/scout4308/TeamList';
@@ -13,8 +13,10 @@ const EventDashboard = () => {
   const [teams, setTeams] = useState([]);
   const [matches, setMatches] = useState([]);
   const [teamStats, setTeamStats] = useState({});
+  const [teamYearStats, setTeamYearStats] = useState({});
   const [scoutingData, setScoutingData] = useState({});
   const [loading, setLoading] = useState(true);
+  const [loadingStats, setLoadingStats] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -32,7 +34,8 @@ const EventDashboard = () => {
         ]);
 
         setEventInfo(info);
-        setTeams(teamsData.sort((a, b) => a.team_number - b.team_number));
+        const sortedTeams = teamsData.sort((a, b) => a.team_number - b.team_number);
+        setTeams(sortedTeams);
         setMatches(matchesData);
         
         // Convert stats array to object keyed by team number
@@ -52,6 +55,15 @@ const EventDashboard = () => {
           });
         }
         setScoutingData(scoutMap);
+
+        // Fetch year stats in background (with fallback)
+        setLoadingStats(true);
+        const teamNumbers = sortedTeams.map(t => t.team_number);
+        getTeamsYearStats(teamNumbers).then(yearStats => {
+          setTeamYearStats(yearStats);
+          setLoadingStats(false);
+        });
+
       } catch (err) {
         setError('Failed to load event data.');
         console.error(err);
@@ -103,6 +115,11 @@ const EventDashboard = () => {
         <p className="text-xs text-ink/70 uppercase tracking-terminal mt-1">
           {eventInfo?.city}, {eventInfo?.state_prov} | {eventInfo?.start_date}
         </p>
+        {loadingStats && (
+          <p className="text-xs text-ink/50 uppercase tracking-terminal mt-2">
+            [ LOADING STATBOTICS DATA... ]
+          </p>
+        )}
       </div>
 
       {/* Tab Navigation */}
@@ -133,7 +150,8 @@ const EventDashboard = () => {
       {activeTab === 'teams' && (
         <TeamList 
           teams={teams} 
-          teamStats={teamStats} 
+          teamStats={teamStats}
+          teamYearStats={teamYearStats}
           scoutingData={scoutingData}
           eventKey={eventKey}
           onScoutingUpdate={updateScoutingData}

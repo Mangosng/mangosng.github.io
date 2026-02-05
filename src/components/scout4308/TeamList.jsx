@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import TeamModal from './TeamModal';
 import { SHOOTER_TYPES, CLIMB_OPTIONS } from '../../lib/scouting';
 
-const TeamList = ({ teams, teamStats, scoutingData, eventKey, onScoutingUpdate }) => {
+const TeamList = ({ teams, teamStats, teamYearStats = {}, scoutingData, eventKey, onScoutingUpdate }) => {
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [sortBy, setSortBy] = useState('number');
   const [sortDir, setSortDir] = useState('asc');
@@ -87,8 +87,8 @@ const TeamList = ({ teams, teamStats, scoutingData, eventKey, onScoutingUpdate }
           bVal = b.team_number;
           break;
         case 'epa':
-          aVal = teamStats[a.team_number]?.epa?.total || 0;
-          bVal = teamStats[b.team_number]?.epa?.total || 0;
+          aVal = teamStats[a.team_number]?.epa?.total || teamYearStats[a.team_number]?.epa?.total || 0;
+          bVal = teamStats[b.team_number]?.epa?.total || teamYearStats[b.team_number]?.epa?.total || 0;
           break;
         case 'scouted':
           aVal = scoutingData[a.team_number] ? 1 : 0;
@@ -101,7 +101,7 @@ const TeamList = ({ teams, teamStats, scoutingData, eventKey, onScoutingUpdate }
 
       return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
     });
-  }, [filteredTeams, sortBy, sortDir, teamStats, scoutingData]);
+  }, [filteredTeams, sortBy, sortDir, teamStats, teamYearStats, scoutingData]);
 
   const SortButton = ({ field, label }) => (
     <button
@@ -128,6 +128,44 @@ const TeamList = ({ teams, teamStats, scoutingData, eventKey, onScoutingUpdate }
       {checked ? '[*]' : '[ ]'} {label}
     </button>
   );
+
+  // Helper to get EPA/OPR display info
+  const getStatsDisplay = (teamNumber) => {
+    const eventStats = teamStats[teamNumber];
+    const yearStats = teamYearStats[teamNumber];
+
+    // Priority: event EPA > year EPA > year rank
+    if (eventStats?.epa?.total) {
+      return {
+        epa: eventStats.epa.total,
+        opr: eventStats.opr || null,
+        label: 'EPA',
+        year: null,
+      };
+    }
+
+    if (yearStats) {
+      if (yearStats.hasCurrentYearData && yearStats.epa?.total) {
+        return {
+          epa: yearStats.epa.total,
+          opr: yearStats.opr || null,
+          label: 'EPA',
+          year: null,
+        };
+      } else {
+        // Show rank from previous year
+        return {
+          epa: yearStats.epa?.total || null,
+          opr: null,
+          rank: yearStats.epa_rank || yearStats.rank,
+          label: `${yearStats.dataYear} RANK`,
+          year: yearStats.dataYear,
+        };
+      }
+    }
+
+    return null;
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -222,8 +260,8 @@ const TeamList = ({ teams, teamStats, scoutingData, eventKey, onScoutingUpdate }
       {/* Team Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {sortedTeams.map((team) => {
-          const stats = teamStats[team.team_number];
           const scout = scoutingData[team.team_number];
+          const statsDisplay = getStatsDisplay(team.team_number);
           
           return (
             <button
@@ -233,10 +271,18 @@ const TeamList = ({ teams, teamStats, scoutingData, eventKey, onScoutingUpdate }
             >
               <div className="flex justify-between items-start mb-2">
                 <span className="text-lg font-bold">{team.team_number}</span>
-                {stats?.epa?.total && (
-                  <span className="text-xs uppercase tracking-terminal bg-canvas group-hover:bg-highlight px-2 py-1 border border-structure group-hover:border-invert">
-                    EPA: {stats.epa.total.toFixed(1)}
-                  </span>
+                {statsDisplay && (
+                  <div className="text-right">
+                    {statsDisplay.rank ? (
+                      <span className="text-xs uppercase tracking-terminal bg-canvas group-hover:bg-highlight px-2 py-1 border border-structure group-hover:border-invert">
+                        {statsDisplay.label}: #{statsDisplay.rank}
+                      </span>
+                    ) : statsDisplay.epa ? (
+                      <span className="text-xs uppercase tracking-terminal bg-canvas group-hover:bg-highlight px-2 py-1 border border-structure group-hover:border-invert">
+                        EPA: {statsDisplay.epa.toFixed(1)}
+                      </span>
+                    ) : null}
+                  </div>
                 )}
               </div>
               <div className="text-xs uppercase tracking-terminal truncate mb-1">
@@ -245,6 +291,12 @@ const TeamList = ({ teams, teamStats, scoutingData, eventKey, onScoutingUpdate }
               <div className="text-xs tracking-terminal text-ink/50 group-hover:text-invert/50 truncate mb-2">
                 {[team.city, team.state_prov, team.country].filter(Boolean).join(', ')}
               </div>
+              {/* OPR display if available */}
+              {statsDisplay?.opr && (
+                <div className="text-xs tracking-terminal text-ink/50 group-hover:text-invert/50 mb-2">
+                  OPR: {statsDisplay.opr.toFixed(1)}
+                </div>
+              )}
               {scout ? (
                 <div className="text-xs uppercase tracking-terminal text-green-600 group-hover:text-green-300">
                   [*] SCOUTED
