@@ -156,7 +156,7 @@ const TeamList = ({ teams, teamStats, teamYearStats = {}, scoutingData, eventKey
     if (eventStats?.epa?.total) {
       return {
         epa: eventStats.epa.total,
-        unitless: null,
+        normalized: null,
         opr: eventStats.opr || null,
         label: 'EPA',
         year: null,
@@ -168,15 +168,15 @@ const TeamList = ({ teams, teamStats, teamYearStats = {}, scoutingData, eventKey
     // Priority 2: Year stats from Statbotics
     if (yearStats) {
       const epa = yearStats.epa?.total_points?.mean;
-      const unitless = yearStats.epa?.unitless;
+      const normalized = yearStats.epa?.norm;
       const rank = yearStats.epa?.ranks?.total?.rank;
       const dataYear = yearStats.dataYear;
       
       if (dataYear === 2026 && epa) {
-        // Current year data - show EPA + unitless
+        // Current year data - show EPA + normalized
         return {
           epa: epa,
-          unitless: unitless,
+          normalized: normalized,
           opr: null,
           label: 'EPA',
           year: 2026,
@@ -184,10 +184,10 @@ const TeamList = ({ teams, teamStats, teamYearStats = {}, scoutingData, eventKey
           isCurrent: true,
         };
       } else if (rank) {
-        // Previous year - show rank + unitless
+        // Previous year - show rank + normalized
         return {
           epa: epa,
-          unitless: unitless,
+          normalized: normalized,
           opr: null,
           label: `${dataYear} RANK`,
           year: dataYear,
@@ -198,7 +198,7 @@ const TeamList = ({ teams, teamStats, teamYearStats = {}, scoutingData, eventKey
         // Has EPA but no rank
         return {
           epa: epa,
-          unitless: unitless,
+          normalized: normalized,
           opr: null,
           label: `${dataYear} EPA`,
           year: dataYear,
@@ -319,26 +319,26 @@ const TeamList = ({ teams, teamStats, teamYearStats = {}, scoutingData, eventKey
                 {statsDisplay && (
                   <div className="text-right flex flex-col gap-1">
                     {statsDisplay.isCurrent ? (
-                      // 2026 data: show EPA + unitless
+                      // 2026 data: show EPA + normalized
                       <>
                         <span className="text-xs uppercase tracking-terminal bg-canvas group-hover:bg-highlight px-2 py-1 border border-structure group-hover:border-invert">
                           EPA: {statsDisplay.epa?.toFixed(1)}
                         </span>
-                        {statsDisplay.unitless && (
-                          <span className="text-xs uppercase tracking-terminal text-ink/50 group-hover:text-invert/50">
-                            UNITLESS: {statsDisplay.unitless.toFixed(0)}
+                        {statsDisplay.normalized && (
+                          <span className="text-xs uppercase tracking-terminal bg-canvas group-hover:bg-highlight px-2 py-1 border border-structure group-hover:border-invert">
+                            NORM: {statsDisplay.normalized.toFixed(0)}
                           </span>
                         )}
                       </>
                     ) : statsDisplay.rank ? (
-                      // Previous year: show rank + unitless
+                      // Previous year: show rank + normalized
                       <>
                         <span className="text-xs uppercase tracking-terminal bg-canvas group-hover:bg-highlight px-2 py-1 border border-structure group-hover:border-invert">
                           {statsDisplay.label}: #{statsDisplay.rank}
                         </span>
-                        {statsDisplay.unitless && (
-                          <span className="text-xs uppercase tracking-terminal text-ink/50 group-hover:text-invert/50">
-                            {statsDisplay.year} UNITLESS: {statsDisplay.unitless.toFixed(0)}
+                        {statsDisplay.normalized && (
+                          <span className="text-xs uppercase tracking-terminal bg-canvas group-hover:bg-highlight px-2 py-1 border border-structure group-hover:border-invert">
+                            {statsDisplay.year} NORM: {statsDisplay.normalized.toFixed(0)}
                           </span>
                         )}
                       </>
@@ -388,6 +388,7 @@ const TeamList = ({ teams, teamStats, teamYearStats = {}, scoutingData, eventKey
         <TeamModal
           team={selectedTeam}
           teamStats={teamStats[selectedTeam.team_number]}
+          teamYearStats={teamYearStats[selectedTeam.team_number]}
           scoutingData={scoutingData[selectedTeam.team_number]}
           eventKey={eventKey}
           onClose={() => setSelectedTeam(null)}

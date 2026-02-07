@@ -10,9 +10,13 @@ const Header = () => {
     return (
       <Link 
         to={to} 
-        className="text-ink uppercase tracking-terminal font-semibold hover:bg-highlight hover:text-invert px-3 py-1 transition-none"
+        className={`text-ink uppercase tracking-terminal font-semibold hover:bg-highlight hover:text-invert px-3 py-1 transition-none ${
+          isActive ? 'bg-highlight text-invert' : ''
+        }`}
       >
-        {isActive ? `[*] ${label}` : `[ ] ${label}`}
+        {/* Show brackets only on desktop */}
+        <span className="hidden sm:inline">{isActive ? '[*] ' : '[ ] '}</span>
+        {label}
       </Link>
     );
   };
@@ -23,18 +27,19 @@ const Header = () => {
         <Link to="/" className="text-ink font-semibold uppercase tracking-terminal text-sm hover:bg-highlight hover:text-invert px-2 py-1 transition-none">
           [ MANAV.IO ]
         </Link>
-        <div className="flex items-center space-x-6">
-          <nav className="flex space-x-6 text-sm">
+        <div className="flex items-center space-x-2 sm:space-x-6">
+          <nav className="flex space-x-2 sm:space-x-6 text-sm">
             <NavItem to="/" label="HOME" />
             <NavItem to="/projects" label="PROJECTS" />
             <NavItem to="/cv" label="CV" />
           </nav>
           <button
             onClick={toggleTheme}
-            className="text-ink uppercase tracking-terminal font-semibold text-sm border border-structure px-3 py-1 hover:bg-highlight hover:text-invert hover:border-highlight transition-none"
+            className="text-ink uppercase tracking-terminal font-semibold text-sm border border-structure px-2 sm:px-3 py-1 hover:bg-highlight hover:text-invert hover:border-highlight transition-none"
             aria-label="Toggle theme"
           >
-            {isDark ? '[ ☀ LIGHT ]' : '[ ☾ DARK ]'}
+            <span className="hidden sm:inline">{isDark ? '[ ☀ LIGHT ]' : '[ ☾ DARK ]'}</span>
+            <span className="sm:hidden">{isDark ? '☀' : '☾'}</span>
           </button>
         </div>
       </div>
