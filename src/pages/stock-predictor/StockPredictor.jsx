@@ -234,11 +234,11 @@ const StockPredictor = () => {
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
                   <p className="text-lg font-bold">{(result.r_squared * 100).toFixed(1)}%</p>
-                  <p className="text-xs text-ink/50">R² SCORE</p>
+                  <p className="text-xs text-ink/50">IN-SAMPLE FIT (R²)</p>
                 </div>
                 <div>
-                  <p className="text-lg font-bold">{result.training_samples}</p>
-                  <p className="text-xs text-ink/50">TRAIN SAMPLES</p>
+                  <p className="text-lg font-bold">{(result.hit_rate * 100).toFixed(1)}%</p>
+                  <p className="text-xs text-ink/50">HIST. HIT RATE</p>
                 </div>
                 <div>
                   <p className="text-lg font-bold">{result.volatility.toFixed(4)}</p>
