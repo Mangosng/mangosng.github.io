@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Dict
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import RidgeCV
 from sklearn.preprocessing import StandardScaler
 
 app = FastAPI()
@@ -55,8 +55,9 @@ def train_and_predict(request: PredictionRequest):
         X_train_scaled = scaler.fit_transform(X_train_raw)
         X_test_scaled = scaler.transform(X_test_raw)
 
-        # 4. Train Ridge Regression on train set
-        model = Ridge(alpha=1.0)
+        # 4. Train Ridge Regression with cross-validated alpha on train set
+        alphas = [0.001, 0.01, 0.1, 1.0, 10.0, 100.0, 1000.0]
+        model = RidgeCV(alphas=alphas, cv=5)
         model.fit(X_train_scaled, y_train)
 
         # 5. Metrics (computed on held-out test set)
@@ -74,7 +75,7 @@ def train_and_predict(request: PredictionRequest):
         X_change_train_scaled = change_scaler.fit_transform(X_change_train)
         X_change_test_scaled = change_scaler.transform(X_change_test)
 
-        change_model = Ridge(alpha=1.0)
+        change_model = RidgeCV(alphas=alphas, cv=5)
         change_model.fit(X_change_train_scaled, y_change_train)
         r_squared = change_model.score(X_change_test_scaled, y_change_test)
 
@@ -93,6 +94,7 @@ def train_and_predict(request: PredictionRequest):
 
         # 6. Re-fit on ALL data for the final prediction (use all available info)
         X_all_scaled = scaler.fit_transform(X_raw)
+        model = RidgeCV(alphas=alphas, cv=5)
         model.fit(X_all_scaled, y_raw)
 
         # 7. Predict
