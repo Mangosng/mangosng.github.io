@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { predictStock, formatTicker } from '../../lib/stockApi';
+import { predictStock, formatTicker, getHistoricalAccuracy } from '../../lib/stockApi';
 import PredictionChart from './PredictionChart';
 
 const MARKETS = [
@@ -15,6 +15,7 @@ const StockPredictor = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const [accuracyStats, setAccuracyStats] = useState(null);
 
   const handlePredict = async () => {
     if (!ticker.trim()) {
@@ -40,6 +41,11 @@ const StockPredictor = () => {
     try {
       const prediction = await predictStock(ticker, market, targetDate);
       setResult(prediction);
+      
+      // Fetch accuracy stats
+      const stats = await getHistoricalAccuracy(ticker);
+      setAccuracyStats(stats);
+      
     } catch (err) {
       console.error('Prediction error:', err);
       setError(err.message || 'Failed to generate prediction');
@@ -198,6 +204,36 @@ const StockPredictor = () => {
                 <span className="text-sm font-mono">${result.upper_bound.toFixed(2)}</span>
               </div>
             </div>
+
+            {/* Historical Accuracy */}
+            {accuracyStats && (
+              <div className="border border-structure p-4 mb-6 bg-canvas">
+                <p className="text-xs uppercase tracking-terminal text-ink/70 mb-2">
+                  HISTORICAL ACCURACY ({accuracyStats.isGlobal ? 'GLOBAL' : accuracyStats.ticker})
+                </p>
+                <div className="flex items-end justify-between">
+                  <div>
+                    <span className={`text-2xl font-bold ${accuracyStats.accuracy > 50 ? 'text-green-600' : 'text-orange-500'}`}>
+                      {accuracyStats.accuracy.toFixed(1)}%
+                    </span>
+                    <span className="text-xs text-ink/50 ml-2 uppercase tracking-terminal">
+                      HIT RATE
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs font-mono text-ink/70">
+                      {accuracyStats.correct} / {accuracyStats.total} CORRECT
+                    </p>
+                    {accuracyStats.isGlobal && (
+                      <p className="text-[10px] uppercase text-ink/40 mt-1">
+                        * Ticker not yet tracked individually
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
 
             {/* Feature Importance */}
             {result.feature_importance && (

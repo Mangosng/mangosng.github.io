@@ -1,48 +1,37 @@
-// @ts-nocheck
 // Supabase Edge Function: predict-stock
-// Trains MLR model and returns stock price prediction
+// Trains MLR model (via Python service) and returns stock price prediction
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { Matrix, inverse } from "https://esm.sh/ml-matrix@6.10.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Ridge Regression Implementation
-class RidgeRegression {
-  private weights: Matrix;
-  private lambda: number;
+interface StockData {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
 
-  constructor(X: number[][], y: number[][], lambda: number = 1.0) {
-    this.lambda = lambda;
-    this.weights = this.train(new Matrix(X), new Matrix(y));
-  }
+interface MacroData {
+  fedFunds: Map<string, number>;
+  cpi: Map<string, number>;
+}
 
-  private train(X: Matrix, y: Matrix): Matrix {
-    const nFeatures = X.columns;
-    const identity = Matrix.eye(nFeatures, nFeatures);
-    
-    // beta = (X'X + lambda*I)^-1 * X'y
-    const Xt = X.transpose();
-    const XtX = Xt.mmul(X);
-    const penalty = identity.mul(this.lambda);
-    const term1 = inverse(XtX.add(penalty));
-    const term2 = Xt.mmul(y);
-    
-    return term1.mmul(term2);
-  }
-
-  public predict(features: number[]): number {
-    const x = new Matrix([features]);
-    return x.mmul(this.weights).get(0, 0);
-  }
-
-  public getCoefficients(): number[] {
-    return this.weights.to1DArray();
-  }
+interface ProcessedData {
+  close: number;
+  sma_20: number;
+  volatility: number;
+  log_return_5d: number;
+  log_return_10d: number;
+  volume_z_score_60d: number;
+  fed_funds: number;
+  cpi: number;
 }
 
 // Format ticker for market
@@ -128,35 +117,8 @@ function calculateBounds(currentPrice: number, dailyVol: number, daysAhead: numb
   };
 }
 
-// Z-score Normalization (Updated signature)
-function normalizeData(data: number[][]): { normalized: number[][], means: number[], stds: number[] } {
-  const numFeatures = data[0].length;
-  const means: number[] = new Array(numFeatures).fill(0);
-  const stds: number[] = new Array(numFeatures).fill(0);
-  const normalized: number[][] = [];
-
-  // Calculate means
-  for (const row of data) {
-    row.forEach((val, i) => means[i] += val);
-  }
-  means.forEach((sum, i) => means[i] = sum / data.length);
-
-  // Calculate stds
-  for (const row of data) {
-    row.forEach((val, i) => stds[i] += Math.pow(val - means[i], 2));
-  }
-  stds.forEach((sum, i) => stds[i] = Math.sqrt(sum / data.length) || 1); // Avoid div by zero
-
-  // Normalize
-  for (const row of data) {
-    normalized.push(row.map((val, i) => (val - means[i]) / stds[i]));
-  }
-
-  return { normalized, means, stds };
-}
-
 // Fetch stock data from Polygon.io
-async function fetchStockData(ticker: string, apiKey: string) {
+async function fetchStockData(ticker: string, apiKey: string): Promise<StockData[]> {
   // Calculate date range (2 years ago to today)
   const today = new Date();
   const twoYearsAgo = new Date();
@@ -189,44 +151,43 @@ async function fetchStockData(ticker: string, apiKey: string) {
 }
 
 // Fetch historical macro data from FRED
-async function fetchMacroData(apiKey: string) {
-  try {
-    // Fetch last 2 years of observations
-    const today = new Date();
-    const twoYearsAgo = new Date();
-    twoYearsAgo.setFullYear(today.getFullYear() - 2);
-    const startDate = twoYearsAgo.toISOString().split('T')[0];
+async function fetchMacroData(apiKey: string): Promise<MacroData> {
+  // Fetch last 2 years of observations
+  const today = new Date();
+  const twoYearsAgo = new Date();
+  twoYearsAgo.setFullYear(today.getFullYear() - 2);
+  const startDate = twoYearsAgo.toISOString().split('T')[0];
 
-    const [fedFundsRes, cpiRes] = await Promise.all([
-      fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key=${apiKey}&file_type=json&sort_order=desc&observation_start=${startDate}`),
-      fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=${apiKey}&file_type=json&sort_order=desc&observation_start=${startDate}`),
-    ]);
-    
-    const fedFundsData = await fedFundsRes.json();
-    const cpiData = await cpiRes.json();
-    
-    // Helper to process FRED observations into a map { date: value }
-    const processObservations = (data: any) => {
-      const map = new Map<string, number>();
-      if (data.observations) {
-        data.observations.forEach((obs: any) => {
-          map.set(obs.date, parseFloat(obs.value));
-        });
-      }
-      return map;
-    };
+  // Using two separate fetch calls, handling parallel promise
+  const [fedFundsRes, cpiRes] = await Promise.all([
+    fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=FEDFUNDS&api_key=${apiKey}&file_type=json&sort_order=desc&observation_start=${startDate}`),
+    fetch(`https://api.stlouisfed.org/fred/series/observations?series_id=CPIAUCSL&api_key=${apiKey}&file_type=json&sort_order=desc&observation_start=${startDate}`),
+  ]);
+  
+  if (!fedFundsRes.ok) throw new Error(`FRED API Error (Fed Funds): ${fedFundsRes.statusText}`);
+  if (!cpiRes.ok) throw new Error(`FRED API Error (CPI): ${cpiRes.statusText}`);
 
-    return {
-      fedFunds: processObservations(fedFundsData),
-      cpi: processObservations(cpiData),
-    };
-  } catch {
-    console.error("Error fetching macro data, using empty maps");
-    return { fedFunds: new Map<string, number>(), cpi: new Map<string, number>() };
-  }
+  const fedFundsData = await fedFundsRes.json();
+  const cpiData = await cpiRes.json();
+  
+  // Helper to process FRED observations into a map { date: value }
+  const processObservations = (data: any) => {
+    const map = new Map<string, number>();
+    if (data.observations) {
+      data.observations.forEach((obs: any) => {
+        map.set(obs.date, parseFloat(obs.value));
+      });
+    }
+    return map;
+  };
+
+  return {
+    fedFunds: processObservations(fedFundsData),
+    cpi: processObservations(cpiData),
+  };
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -279,7 +240,7 @@ serve(async (req) => {
     // Helper to get latest macro value before a date
     const getMacroValue = (map: Map<string, number>, dateStr: string) => {
       // Crude but effective for small datasets (24 months): iterate and find latest
-      let latestVal = null;
+      let latestVal: number | null = null;
       let latestDate = "";
       for (const [d, v] of map.entries()) {
         if (d <= dateStr && d > latestDate) {
@@ -291,7 +252,7 @@ serve(async (req) => {
     };
 
     // Build processed data
-    const processedData: any[] = [];
+    const processedData: ProcessedData[] = [];
     // Start from 60 to ensure all indicators are available (Volume Z-Score needs 60)
     for (let i = 60; i < stockData.length; i++) {
       if (sma20[i] == null || volatility[i] == null || logReturn5d[i] == null || logReturn10d[i] == null || volumeZScore60d[i] == null) continue;
@@ -300,123 +261,80 @@ serve(async (req) => {
       const fedFunds = getMacroValue(macroData.fedFunds, dateStr);
       const cpi = getMacroValue(macroData.cpi, dateStr);
 
-      // If macro data missing (e.g. very recent days before release), use last known
-      // If no history at all, default (shouldn't happen with 2y fetch)
-      
+      if (fedFunds === null || cpi === null) {
+        // If we can't find macro data for a specific date, it might be due to lag.
+        // However, if we miss it for *all* datapoints, that's a problem.
+        // For now, let's skip rows where we can't align data, rather than falsifying it.
+        // Or if it's the *latest* data point, we might fail hard.
+        // Given this loop builds training data, skipping a few days is better than bad data.
+        continue;
+      }
+
       processedData.push({
         close: closes[i],
-        sma_20: sma20[i],
-        volatility: volatility[i],
-        log_return_5d: logReturn5d[i],
-        log_return_10d: logReturn10d[i],
-        volume_z_score_60d: volumeZScore60d[i],
-        fed_funds: fedFunds || 4.5, // Fallback
-        cpi: cpi || 300, // Fallback
+        sma_20: sma20[i]!,
+        volatility: volatility[i]!,
+        log_return_5d: logReturn5d[i]!,
+        log_return_10d: logReturn10d[i]!,
+        volume_z_score_60d: volumeZScore60d[i]!,
+        fed_funds: fedFunds, 
+        cpi: cpi,
       });
     }
     
     if (processedData.length < daysAhead + 30) {
-      throw new Error("Insufficient data for prediction horizon");
+      // If we filtered out too much data due to missing macro indicators, this will trip
+      throw new Error("Insufficient aligned data (Stock + Macro) for prediction");
     }
-    
-    // Prepare training data
-    const X: number[][] = [];
-    const y: number[][] = [];
-    
-    for (let i = 0; i < processedData.length - daysAhead; i++) {
-      const row = processedData[i];
-      // Features: [Close, SMA_20, Volatility, LogRet5, LogRet10, VolZ60, FedFunds, CPI]
-      X.push([
-        row.close, 
-        row.sma_20, 
-        row.volatility, 
-        row.log_return_5d, 
-        row.log_return_10d, 
-        row.volume_z_score_60d, 
-        row.fed_funds, 
-        row.cpi
-      ]);
-      y.push([processedData[i + daysAhead].close]);
-    }
-    
-    // Normalize training data
-    const { normalized: X_norm, means, stds } = normalizeData(X);
 
-    // Center y (Target) for Ridge Regression (since we don't have an intercept)
-    const meanY = y.reduce((a, b) => a + b[0], 0) / y.length;
-    const y_centered = y.map(row => [row[0] - meanY]);
+    // Prepare payload for Python Service
+    const trainingDataPoints = processedData.slice(0, -daysAhead).map(row => ({
+      date: "2023-01-01", 
+      close: row.close,
+      volume: row.volume_z_score_60d, // Mapping Z-score to 'volume' input
+      sma_20: row.sma_20,
+      volatility: row.volatility,
+      fed_funds: row.fed_funds,
+      cpi: row.cpi
+    }));
 
-    // Train Ridge Regression model (Lambda = 1.0) on centered data
-    const regression = new RidgeRegression(X_norm, y_centered, 1.0);
-    
-    // Get coefficients
-    const coefficients = regression.getCoefficients(); 
-    
-    // Prepare latest data for prediction
     const latest = processedData[processedData.length - 1];
-    const latestFeatures = [
-      latest.close,
-      latest.sma_20,
-      latest.volatility,
-      latest.log_return_5d,
-      latest.log_return_10d,
-      latest.volume_z_score_60d,
-      latest.fed_funds,
-      latest.cpi
-    ];
+    const currentFeatures = {
+      close: latest.close,
+      volume: latest.volume_z_score_60d, // Mapping Z-score
+      sma_20: latest.sma_20,
+      volatility: latest.volatility,
+      fed_funds: latest.fed_funds,
+      cpi: latest.cpi
+    };
+
+    const mlServiceUrl = "https://stock-predictor-ml-1jmf.onrender.com/train-and-predict";
     
-    // Normalize latest features
-    const latestFeaturesNorm = latestFeatures.map((val, i) => (val - means[i]) / stds[i]);
+    const mlResponse = await fetch(mlServiceUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        training_data: trainingDataPoints,
+        current_features: currentFeatures,
+        days_ahead: daysAhead
+      })
+    });
+
+    if (!mlResponse.ok) {
+      const errText = await mlResponse.text();
+      throw new Error(`ML Service Error: ${errText}`);
+    }
+
+    const result = await mlResponse.json();
     
-    // Predict (add meanY back)
-    let raw_prediction = regression.predict(latestFeaturesNorm);
-    let prediction = raw_prediction + meanY;
+    let prediction = result.predicted_price;
+    const rSquared = result.r_squared || 0.0;
+    const hitRate = result.hit_rate || 0.0;
+    const featureImportance = result.feature_importance;
     
     // Apply dynamic clamping (2-sigma rule)
     const { lower, upper } = calculateBounds(latest.close, latest.volatility, daysAhead);
-    prediction = Math.max(lower, Math.min(prediction, upper));
-    
-    // --- Metrics Calculation ---
-
-    // 1. Feature Importance (Sum-Normalized)
-    const absWeights = coefficients.map((w: number) => Math.abs(w));
-    const totalWeight = absWeights.reduce((a: number, b: number) => a + b, 0);
-    const featureNames = ["Price", "SMA (20d)", "Volatility", "Momentum (5d)", "Momentum (10d)", "Vol Z-Score", "Fed Funds", "CPI"];
-    const featureImportance: Record<string, number> = {};
-    featureNames.forEach((name, i) => {
-      featureImportance[name] = (absWeights[i] / totalWeight) * 100;
-    });
-
-    // 2. R-Squared (In-Sample Fit)
-    // Compare actual y vs (predicted_centered + meanY)
-    let ssRes = 0, ssTot = 0;
-    X_norm.forEach((x, i) => {
-      const pred_centered = regression.predict(x);
-      const pred_actual = pred_centered + meanY;
-      ssRes += Math.pow(pred_actual - y[i][0], 2);
-      ssTot += Math.pow(y[i][0] - meanY, 2);
-    });
-    const rSquared = Math.max(0, 1 - ssRes / ssTot);
-
-    // 3. Historical Hit Rate (Directional Accuracy)
-    let correctDirection = 0;
-    let totalSamples = 0;
-    
-    X_norm.forEach((x, i) => {
-      const pred_centered = regression.predict(x);
-      const predPrice = pred_centered + meanY;
-      const actualPrice = y[i][0];
-      const currentPriceAtT = X[i][0]; // Original Close price is at index 0
-      
-      const predictedDirection = Math.sign(predPrice - currentPriceAtT);
-      const actualDirection = Math.sign(actualPrice - currentPriceAtT);
-      
-      if (predictedDirection === actualDirection) {
-        correctDirection++;
-      }
-      totalSamples++;
-    });
-    const hitRate = totalSamples > 0 ? (correctDirection / totalSamples) : 0;
+    prediction = Math.max(lower, Math.min(prediction, upper)); 
     
     // Save to database
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -434,7 +352,7 @@ serve(async (req) => {
         ...latest,
         r_squared: rSquared,
         hit_rate: hitRate,
-        training_samples: X.length,
+        training_samples: trainingDataPoints.length,
       },
     });
     
@@ -455,7 +373,7 @@ serve(async (req) => {
         currency: market === "TSX" ? "CAD" : "USD",
         r_squared: Math.round(rSquared * 1000) / 1000,
         hit_rate: Math.round(hitRate * 1000) / 1000,
-        training_samples: X.length,
+        training_samples: trainingDataPoints.length,
         volatility: Math.round(latest.volatility * 10000) / 10000,
         feature_importance: featureImportance,
       }),
@@ -464,9 +382,9 @@ serve(async (req) => {
         status: 200,
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message || "Unknown error" }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
